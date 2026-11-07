@@ -68,6 +68,7 @@ class RedVpnService : VpnService(), PlatformInterface {
     private fun startBox(config: String) {
         releaseBox()
         synchronized(logBuffer) { logBuffer.clear() }
+        appLog("[TheVil] نسخه: v4-interfaces")
         appLog("[app] starting sing-box, config ${config.length} bytes")
         try {
             setupOnce()
