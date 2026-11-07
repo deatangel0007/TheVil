@@ -7,9 +7,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.net.VpnService
 import android.os.Build
 import android.os.ParcelFileDescriptor
+import android.system.OsConstants
 import io.nekohasekai.libbox.BoxService
 import io.nekohasekai.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.Libbox
@@ -175,23 +179,141 @@ class RedVpnService : VpnService(), PlatformInterface {
 
     override fun useProcFS(): Boolean = Build.VERSION.SDK_INT < Build.VERSION_CODES.Q
 
-    // --- پایش اینترفیس پیش‌فرض (⚠️ امضای updateDefaultInterface وابسته به نسخه است)
-    override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
-        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = cm.activeNetwork ?: return
-        val name = cm.getLinkProperties(network)?.interfaceName ?: return
-        val index = NetworkInterface.getByName(name)?.index ?: return
-        listener.updateDefaultInterface(name, index, false, false)
+    // ------------------------------------------------ اینترفیس پیش‌فرض شبکه
+    // هسته باید بداند اینترنت واقعی (وای‌فای/دیتا) از کدام اینترفیس می‌رود، تا سوکت‌های
+    // خودش را به آن وصل کند و وارد تونل نشود.
+
+    private var netCallback: ConnectivityManager.NetworkCallback? = null
+
+    private fun connectivity() =
+        getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+    /** بهترین شبکه‌ی واقعی (غیر VPN، دارای اینترنت)؛ شبکه‌ی تأییدشده اولویت دارد. */
+    @Suppress("DEPRECATION")
+    private fun pickNetwork(cm: ConnectivityManager): Network? =
+        cm.allNetworks
+            .filter { n ->
+                val c = cm.getNetworkCapabilities(n) ?: return@filter false
+                c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+                    c.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            }
+            .sortedByDescending { n ->
+                if (cm.getNetworkCapabilities(n)
+                        ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+                ) 1 else 0
+            }
+            .firstOrNull()
+
+    private fun reportDefault(listener: InterfaceUpdateListener) {
+        try {
+            val cm = connectivity()
+            val n = pickNetwork(cm)
+            if (n == null) {
+                listener.updateDefaultInterface("", -1, false, false)
+                return
+            }
+            val name = cm.getLinkProperties(n)?.interfaceName ?: return
+            val index = NetworkInterface.getByName(name)?.index ?: return
+            appLog("[TheVil] اینترفیس پیش‌فرض: $name (index=$index)")
+            listener.updateDefaultInterface(name, index, false, false)
+        } catch (t: Throwable) {
+            appLog("[TheVil] reportDefault خطا: $t")
+        }
     }
 
-    override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {}
+    override fun startDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
+        val cm = connectivity()
+        reportDefault(listener)
+        val request = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .build()
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) = reportDefault(listener)
+            override fun onLost(network: Network) = reportDefault(listener)
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) =
+                reportDefault(listener)
+        }
+        try {
+            cm.registerNetworkCallback(request, cb)
+            netCallback = cb
+        } catch (t: Throwable) {
+            appLog("[TheVil] registerNetworkCallback خطا: $t")
+        }
+    }
+
+    override fun closeDefaultInterfaceMonitor(listener: InterfaceUpdateListener) {
+        val cb = netCallback ?: return
+        try {
+            connectivity().unregisterNetworkCallback(cb)
+        } catch (_: Throwable) {
+        }
+        netCallback = null
+    }
+
+    /** فهرست اینترفیس‌های شبکه برای هسته (بدون این، هسته «no such network interface» می‌دهد). */
+    @Suppress("DEPRECATION")
+    override fun getInterfaces(): NetworkInterfaceIterator {
+        val cm = connectivity()
+        val javaInterfaces = try {
+            NetworkInterface.getNetworkInterfaces()?.toList() ?: emptyList()
+        } catch (_: Throwable) {
+            emptyList()
+        }
+        val result = mutableListOf<io.nekohasekai.libbox.NetworkInterface>()
+        for (network in cm.allNetworks) {
+            val lp = cm.getLinkProperties(network) ?: continue
+            val caps = cm.getNetworkCapabilities(network) ?: continue
+            val name = lp.interfaceName ?: continue
+            val ni = javaInterfaces.find { it.name == name } ?: continue
+
+            val box = io.nekohasekai.libbox.NetworkInterface()
+            box.name = name
+            box.index = ni.index
+            runCatching { box.mtu = ni.mtu }
+            box.type = when {
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> Libbox.InterfaceTypeWIFI
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> Libbox.InterfaceTypeCellular
+                caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> Libbox.InterfaceTypeEthernet
+                else -> Libbox.InterfaceTypeOther
+            }
+            box.addresses = stringIterator(
+                ni.interfaceAddresses.mapNotNull { a ->
+                    val host = a.address.hostAddress?.substringBefore('%') ?: return@mapNotNull null
+                    "$host/${a.networkPrefixLength}"
+                }
+            )
+            box.dnsServer = stringIterator(lp.dnsServers.mapNotNull { it.hostAddress })
+
+            var flags = 0
+            if (runCatching { ni.isUp }.getOrDefault(true)) {
+                flags = flags or OsConstants.IFF_UP or OsConstants.IFF_RUNNING
+            }
+            if (runCatching { ni.isLoopback }.getOrDefault(false)) flags = flags or OsConstants.IFF_LOOPBACK
+            if (runCatching { ni.isPointToPoint }.getOrDefault(false)) flags = flags or OsConstants.IFF_POINTOPOINT
+            if (runCatching { ni.supportsMulticast() }.getOrDefault(false)) flags = flags or OsConstants.IFF_MULTICAST
+            box.flags = flags
+            box.metered = !caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_NOT_METERED)
+            result.add(box)
+        }
+        appLog("[TheVil] getInterfaces: ${result.size} اینترفیس")
+        val it = result.iterator()
+        return object : NetworkInterfaceIterator {
+            override fun hasNext(): Boolean = it.hasNext()
+            override fun next(): io.nekohasekai.libbox.NetworkInterface = it.next()
+        }
+    }
+
+    private fun stringIterator(items: List<String>): StringIterator {
+        val it = items.iterator()
+        return object : StringIterator {
+            override fun hasNext(): Boolean = it.hasNext()
+            override fun len(): Int = items.size
+            override fun next(): String = it.next()
+        }
+    }
 
     // --- بقیه‌ی متدها: پیاده‌سازی حداقلی
-    override fun getInterfaces(): NetworkInterfaceIterator = object : NetworkInterfaceIterator {
-        override fun hasNext(): Boolean = false
-        override fun next(): io.nekohasekai.libbox.NetworkInterface =
-            throw NoSuchElementException()
-    }
 
     override fun systemCertificates(): StringIterator = object : StringIterator {
         override fun hasNext(): Boolean = false
