@@ -13,7 +13,6 @@ import android.os.ParcelFileDescriptor
 import io.nekohasekai.libbox.BoxService
 import io.nekohasekai.libbox.InterfaceUpdateListener
 import io.nekohasekai.libbox.Libbox
-import io.nekohasekai.libbox.NeighborUpdateListener
 import io.nekohasekai.libbox.NetworkInterfaceIterator
 import io.nekohasekai.libbox.PlatformInterface
 import io.nekohasekai.libbox.SetupOptions
@@ -169,8 +168,19 @@ class RedVpnService : VpnService(), PlatformInterface {
         sourcePort: Int,
         destinationAddress: String,
         destinationPort: Int,
-    ): io.nekohasekai.libbox.ConnectionOwner =
-        throw UnsupportedOperationException("per-app rules not supported yet")
+    ): Int = throw UnsupportedOperationException("per-app rules not supported yet")
+
+    override fun packageNameByUid(uid: Int): String =
+        packageManager.getPackagesForUid(uid)?.firstOrNull()
+            ?: throw NoSuchElementException("no package for uid $uid")
+
+    @Suppress("DEPRECATION")
+    override fun uidByPackageName(packageName: String): Int =
+        packageManager.getApplicationInfo(packageName, 0).uid
+
+    override fun writeLog(message: String) {
+        android.util.Log.d("TheVil", message)
+    }
 
     override fun localDNSTransport(): io.nekohasekai.libbox.LocalDNSTransport? = null
     override fun underNetworkExtension(): Boolean = false
@@ -178,9 +188,6 @@ class RedVpnService : VpnService(), PlatformInterface {
     override fun readWIFIState(): WIFIState? = null
     override fun clearDNSCache() {}
     override fun sendNotification(notification: io.nekohasekai.libbox.Notification) {}
-    override fun startNeighborMonitor(listener: NeighborUpdateListener) {}
-    override fun closeNeighborMonitor(listener: NeighborUpdateListener) {}
-    override fun registerMyInterface(name: String) {}
 
     companion object {
         const val ACTION_START = "com.redvpn.START"
