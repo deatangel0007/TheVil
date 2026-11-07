@@ -21,6 +21,25 @@ class VpnService {
     }
   }
 
+  /// وضعیت سرویس نیتیو: {running: bool, error: String?}
+  Future<Map<String, dynamic>?> status() async {
+    try {
+      final r = await _channel.invokeMethod('status');
+      return (r as Map?)?.cast<String, dynamic>();
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
+  /// متن کرش دفعه‌ی قبل (اگر برنامه کرش کرده باشد)
+  Future<String?> takeCrash() async {
+    try {
+      return await _channel.invokeMethod<String>('takeCrash');
+    } on MissingPluginException {
+      return null;
+    }
+  }
+
   Future<void> stop() async {
     try {
       await _channel.invokeMethod('stop');

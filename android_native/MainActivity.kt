@@ -14,6 +14,20 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+
+        // اگر برنامه کرش کرد، متن خطا را ذخیره می‌کنیم تا دفعه‌ی بعد نشان داده شود
+        val previous = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            try {
+                java.io.File(filesDir, "crash.txt").writeText(
+                    "${throwable.javaClass.name}: ${throwable.message}\n" +
+                        throwable.stackTrace.take(12).joinToString("\n") { "  at $it" }
+                )
+            } catch (_: Throwable) {
+            }
+            previous?.uncaughtException(thread, throwable)
+        }
+
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "red_vpn/core")
             .setMethodCallHandler { call, result ->
                 when (call.method) {
@@ -33,6 +47,20 @@ class MainActivity : FlutterActivity() {
                             startVpn(config)
                             result.success(null)
                         }
+                    }
+                    "status" -> {
+                        result.success(
+                            mapOf(
+                                "running" to RedVpnService.running,
+                                "error" to RedVpnService.lastError,
+                            )
+                        )
+                    }
+                    "takeCrash" -> {
+                        val f = java.io.File(filesDir, "crash.txt")
+                        val text = if (f.exists()) f.readText() else null
+                        f.delete()
+                        result.success(text)
                     }
                     "stop" -> {
                         startService(

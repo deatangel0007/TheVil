@@ -20,6 +20,9 @@ class AppState extends ChangeNotifier {
   String? selectedId;
   ConnStatus status = ConnStatus.disconnected;
 
+  /// آخرین خطا (برای نمایش به کاربر)
+  String? error;
+
   ServerConfig? get selected {
     for (final s in servers) {
       if (s.id == selectedId) return s;
@@ -34,6 +37,8 @@ class AppState extends ChangeNotifier {
     final s = p.getString(_kServers);
     if (s != null) servers = ServerConfig.decodeList(s);
     selectedId = p.getString(_kSelected);
+    final crash = await _vpn.takeCrash();
+    if (crash != null && crash.isNotEmpty) error = 'کرش قبلی:\n$crash';
     notifyListeners();
   }
 
@@ -83,13 +88,34 @@ class AppState extends ChangeNotifier {
     }
 
     status = ConnStatus.connecting;
+    error = null;
     notifyListeners();
     try {
       await _vpn.start(SingboxConfig.fromLink(s.raw));
+      if (!_vpn.mockMode) await _waitForService();
       status = ConnStatus.connected;
-    } catch (_) {
+    } catch (e) {
+      error = e.toString();
       status = ConnStatus.disconnected;
     }
+    notifyListeners();
+  }
+
+  /// منتظر می‌ماند تا سرویس نیتیو بالا بیاید؛ اگر خطا داشت آن را پرتاب می‌کند.
+  Future<void> _waitForService() async {
+    for (var i = 0; i < 30; i++) {
+      await Future.delayed(const Duration(milliseconds: 300));
+      final st = await _vpn.status();
+      if (st == null) return;
+      final err = st['error'] as String?;
+      if (err != null) throw err;
+      if (st['running'] == true) return;
+    }
+    throw 'سرویس VPN بعد از ۹ ثانیه بالا نیامد';
+  }
+
+  void clearError() {
+    error = null;
     notifyListeners();
   }
 

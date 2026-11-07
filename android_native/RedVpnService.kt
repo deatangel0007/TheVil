@@ -53,14 +53,19 @@ class RedVpnService : VpnService(), PlatformInterface {
 
     private fun startBox(config: String) {
         stopBox()
-        showForeground()
+        lastError = null
         try {
+            showForeground()
             setupOnce()
             val service = Libbox.newService(config, this)
             service.start()
             box = service
-        } catch (e: Exception) {
-            e.printStackTrace()
+            running = true
+        } catch (t: Throwable) {
+            // خطا را ذخیره می‌کنیم تا برنامه به‌جای کرش، آن را نشان دهد
+            lastError = "${t.javaClass.name}: ${t.message}\n" +
+                t.stackTrace.take(8).joinToString("\n") { "  at $it" }
+            running = false
             stopBox()
         }
     }
@@ -68,15 +73,19 @@ class RedVpnService : VpnService(), PlatformInterface {
     private fun stopBox() {
         try {
             box?.close()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
         box = null
         try {
             tun?.close()
-        } catch (_: Exception) {
+        } catch (_: Throwable) {
         }
         tun = null
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        running = false
+        try {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+        } catch (_: Throwable) {
+        }
         stopSelf()
     }
 
@@ -103,7 +112,7 @@ class RedVpnService : VpnService(), PlatformInterface {
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SYSTEM_EXEMPTED)
+            startForeground(1, n, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE)
         } else {
             startForeground(1, n)
         }
@@ -194,6 +203,12 @@ class RedVpnService : VpnService(), PlatformInterface {
         const val ACTION_STOP = "com.redvpn.STOP"
         const val EXTRA_CONFIG = "config"
         private const val CHANNEL_ID = "red_vpn"
+
+        @Volatile
+        var running = false
+
+        @Volatile
+        var lastError: String? = null
         private var didSetup = false
     }
 }

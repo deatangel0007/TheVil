@@ -59,6 +59,50 @@ class HomeScreen extends StatelessWidget {
                   style: TextStyle(color: AppColors.textDim, fontSize: 12),
                 ),
               ),
+            if (app.error != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 14),
+                child: Container(
+                  width: double.infinity,
+                  constraints: const BoxConstraints(maxHeight: 180),
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.redDark.withOpacity(0.25),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.red),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Expanded(
+                            child: Text('خطا (متن را کپی کن و بفرست)',
+                                style: TextStyle(fontWeight: FontWeight.w700)),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(Icons.close, size: 18),
+                            onPressed: app.clearError,
+                          ),
+                        ],
+                      ),
+                      Flexible(
+                        child: SingleChildScrollView(
+                          child: Directionality(
+                            textDirection: TextDirection.ltr,
+                            child: SelectableText(
+                              app.error!,
+                              style: const TextStyle(
+                                  fontSize: 11, color: AppColors.textDim),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             const Spacer(),
             Card(
               child: ListTile(
