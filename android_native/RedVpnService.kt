@@ -37,6 +37,10 @@ class RedVpnService : VpnService(), PlatformInterface {
     private var box: BoxService? = null
     private var tun: ParcelFileDescriptor? = null
 
+    // تنظیمات پروکسی بر اساس برنامه (از Intent شروع)
+    private var appMode: String = "off"
+    private var appPackages: List<String> = emptyList()
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
@@ -46,6 +50,8 @@ class RedVpnService : VpnService(), PlatformInterface {
                 synchronized(logBuffer) { logBuffer.clear() }
                 val promoted = showForeground()
                 val config = intent.getStringExtra(EXTRA_CONFIG)
+                appMode = intent.getStringExtra(EXTRA_APP_MODE) ?: "off"
+                appPackages = intent.getStringArrayListExtra(EXTRA_APP_PACKAGES) ?: emptyList()
                 if (promoted && config != null) {
                     startBox(config)
                 } else {
@@ -68,8 +74,8 @@ class RedVpnService : VpnService(), PlatformInterface {
     private fun startBox(config: String) {
         releaseBox()
         synchronized(logBuffer) { logBuffer.clear() }
-        appLog("[TheVil] نسخه: v4-interfaces")
-        appLog("[app] starting sing-box, config ${config.length} bytes")
+        appLog("[TheVil] نسخه: v5-settings")
+        appLog("[app] starting sing-box, config ${config.length} bytes, perApp=$appMode (${appPackages.size})")
         try {
             setupOnce()
             val service = Libbox.newService(config, this)
@@ -164,11 +170,47 @@ class RedVpnService : VpnService(), PlatformInterface {
             .addDnsServer("1.1.1.1") // کوئری‌های DNS با hijack-dns توسط هسته گرفته می‌شود
         // نکته: خود اپ را از VPN مستثنا نمی‌کنیم تا «تست اینترنت» از مسیر VPN برود.
         // سوکت‌های خود هسته با protect() از VPN بیرون می‌مانند، پس حلقه ایجاد نمی‌شود.
+        applyPerApp(builder)
         val pfd = builder.establish() ?: error("VPN establish failed")
         tun = pfd
         val fd = pfd.detachFd()
         appLog("[TheVil] TUN ساخته شد (fd=$fd)")
         return fd
+    }
+
+    /**
+     * پروکسی بر اساس برنامه: allowed و disallowed را نمی‌شود با هم ترکیب کرد.
+     *  only   → فقط برنامه‌های انتخابی (+ خود TheVil برای تست اتصال)
+     *  bypass → همه به‌جز برنامه‌های انتخابی
+     */
+    private fun applyPerApp(builder: Builder) {
+        if (appMode == "off" || appPackages.isEmpty()) return
+        var count = 0
+        try {
+            if (appMode == "only") {
+                builder.addAllowedApplication(packageName)
+                for (p in appPackages) {
+                    try {
+                        builder.addAllowedApplication(p)
+                        count++
+                    } catch (_: Throwable) {
+                        appLog("[TheVil] برنامه پیدا نشد: $p")
+                    }
+                }
+            } else if (appMode == "bypass") {
+                for (p in appPackages) {
+                    try {
+                        builder.addDisallowedApplication(p)
+                        count++
+                    } catch (_: Throwable) {
+                        appLog("[TheVil] برنامه پیدا نشد: $p")
+                    }
+                }
+            }
+            appLog("[TheVil] per-app: $appMode, $count برنامه")
+        } catch (t: Throwable) {
+            appLog("[TheVil] per-app خطا: $t")
+        }
     }
 
     /** سوکت‌های خروجی هسته از VPN رد نشوند. */
@@ -353,6 +395,8 @@ class RedVpnService : VpnService(), PlatformInterface {
         const val ACTION_START = "com.redvpn.START"
         const val ACTION_STOP = "com.redvpn.STOP"
         const val EXTRA_CONFIG = "config"
+        const val EXTRA_APP_MODE = "appMode"
+        const val EXTRA_APP_PACKAGES = "appPackages"
         private const val CHANNEL_ID = "red_vpn"
 
         private val logBuffer = ArrayList<String>()

@@ -12,9 +12,17 @@ class VpnService {
   bool mockMode = false;
 
   /// [configJson] کانفیگ کامل sing-box است (از SingboxConfig.fromLink).
-  Future<void> start(String configJson) async {
+  Future<void> start(
+    String configJson, {
+    String appMode = 'off',
+    List<String> appPackages = const [],
+  }) async {
     try {
-      await _channel.invokeMethod('start', {'config': configJson});
+      await _channel.invokeMethod('start', {
+        'config': configJson,
+        'appMode': appMode,
+        'appPackages': appPackages,
+      });
     } on MissingPluginException {
       mockMode = true;
       await Future.delayed(const Duration(milliseconds: 1500));
@@ -46,6 +54,41 @@ class VpnService {
       return await _channel.invokeMethod<String>('takeCrash');
     } on MissingPluginException {
       return null;
+    }
+  }
+
+  /// ترافیک: {rx, tx, running}؛ rx/tx برابر -1 یعنی دستگاه پشتیبانی نمی‌کند.
+  Future<Map<String, dynamic>?> traffic() async {
+    try {
+      final r = await _channel.invokeMethod('traffic');
+      return (r as Map?)?.cast<String, dynamic>();
+    } on MissingPluginException {
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// فهرست برنامه‌های نصب‌شده: [{package, label, system}]
+  Future<List<Map<String, dynamic>>> listApps() async {
+    try {
+      final r = await _channel.invokeMethod<List<dynamic>>('listApps');
+      return (r ?? const [])
+          .map((e) => (e as Map).cast<String, dynamic>())
+          .toList();
+    } on MissingPluginException {
+      return [];
+    }
+  }
+
+  /// اسکن QR با دوربین؛ متن QR یا null (لغو). خطا را پرتاب می‌کند.
+  Future<String?> scanQr() async {
+    try {
+      return await _channel.invokeMethod<String>('scanQr');
+    } on MissingPluginException {
+      throw 'اسکن QR در حالت شبیه‌سازی ممکن نیست';
+    } on PlatformException catch (e) {
+      throw e.message ?? e.code;
     }
   }
 

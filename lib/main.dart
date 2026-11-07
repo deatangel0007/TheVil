@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import 'screens/home_screen.dart';
 import 'screens/servers_screen.dart';
+import 'screens/settings_screen.dart';
 import 'state/app_state.dart';
 import 'theme/app_theme.dart';
 
@@ -47,6 +48,7 @@ class _ShellState extends State<Shell> {
     final pages = [
       HomeScreen(onOpenServers: () => setState(() => _index = 1)),
       const ServersScreen(),
+      const SettingsScreen(),
     ];
     return Scaffold(
       body: IndexedStack(index: _index, children: pages),
@@ -58,6 +60,8 @@ class _ShellState extends State<Shell> {
               icon: Icon(Icons.home_rounded), label: 'خانه'),
           NavigationDestination(
               icon: Icon(Icons.dns_rounded), label: 'سرورها'),
+          NavigationDestination(
+              icon: Icon(Icons.settings_rounded), label: 'تنظیمات'),
         ],
       ),
     );

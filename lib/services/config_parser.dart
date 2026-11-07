@@ -6,7 +6,7 @@ import '../models/server_config.dart';
 class ConfigParser {
   /// چند لینک (هر خط یکی) یا یک محتوای base64 از اشتراک را می‌پذیرد.
   static List<ServerConfig> parseMany(String text) {
-    var content = text.trim();
+    var content = text.replaceAll('﻿', '').trim();
     if (!content.contains('://')) {
       final decoded = _tryB64(content);
       if (decoded != null) content = decoded;
@@ -29,6 +29,22 @@ class ConfigParser {
     return null;
   }
 
+  /// پروتکل‌هایی که در متن هستند ولی برنامه پشتیبانی نمی‌کند (برای پیام خطای بهتر).
+  static Set<String> unsupportedSchemes(String text) {
+    var content = text.trim();
+    if (!content.contains('://')) {
+      content = _tryB64(content) ?? content;
+    }
+    const known = {'vmess', 'vless', 'trojan', 'ss', 'http', 'https'};
+    final found = <String>{};
+    for (final m in RegExp(r'(^|\s)([a-zA-Z][a-zA-Z0-9+.-]{1,15})://')
+        .allMatches(content)) {
+      final s = m.group(2)!.toLowerCase();
+      if (!known.contains(s)) found.add(s);
+    }
+    return found;
+  }
+
   static ServerConfig _vmess(String link) {
     final body = link.substring('vmess://'.length);
     final json = jsonDecode(_b64(body)) as Map<String, dynamic>;
@@ -49,9 +65,7 @@ class ConfigParser {
 
   static ServerConfig _uri(String link, Protocol p) {
     final u = Uri.parse(link);
-    final name = u.fragment.isNotEmpty
-        ? Uri.decodeComponent(u.fragment)
-        : u.host;
+    final name = u.fragment.isNotEmpty ? _decode(u.fragment) : u.host;
     return ServerConfig(
       id: _id(link),
       name: name,
@@ -67,11 +81,14 @@ class ConfigParser {
     var name = '';
     final hash = rest.indexOf('#');
     if (hash != -1) {
-      name = Uri.decodeComponent(rest.substring(hash + 1));
+      name = _decode(rest.substring(hash + 1));
       rest = rest.substring(0, hash);
     }
     final q = rest.indexOf('?');
     if (q != -1) rest = rest.substring(0, q);
+    while (rest.endsWith('/')) {
+      rest = rest.substring(0, rest.length - 1);
+    }
 
     String hostPort;
     if (rest.contains('@')) {
@@ -93,21 +110,35 @@ class ConfigParser {
     );
   }
 
+  /// decodeComponent که روی «%» ناقص خطا نمی‌دهد.
+  static String _decode(String s) {
+    try {
+      return Uri.decodeComponent(s);
+    } catch (_) {
+      return s;
+    }
+  }
+
   static String _id(String s) => s.hashCode.toRadixString(16);
 
   static String? _tryB64(String s) {
     try {
-      return _b64(s);
+      final d = _b64(s);
+      return d.isEmpty ? null : d;
     } catch (_) {
       return null;
     }
   }
 
   static String _b64(String s) {
-    var t = s.replaceAll('-', '+').replaceAll('_', '/').trim();
+    var t = s
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll('-', '+')
+        .replaceAll('_', '/');
+    t = t.replaceAll('=', '');
     while (t.length % 4 != 0) {
       t += '=';
     }
-    return utf8.decode(base64.decode(t));
+    return utf8.decode(base64.decode(t), allowMalformed: true);
   }
 }

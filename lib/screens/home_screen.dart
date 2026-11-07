@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../models/traffic_info.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/connect_button.dart';
@@ -22,10 +23,15 @@ class HomeScreen extends StatelessWidget {
     };
 
     return SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
+      child: LayoutBuilder(
+        builder: (context, box) => SingleChildScrollView(
+          padding: const EdgeInsets.all(20),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: box.maxHeight - 40),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Column(children: [
             Align(
               alignment: AlignmentDirectional.centerEnd,
               child: IconButton(
@@ -48,7 +54,9 @@ class HomeScreen extends StatelessWidget {
                 color: AppColors.red,
               ),
             ),
-            const Spacer(),
+                ]),
+                Column(children: [
+            const SizedBox(height: 24),
             ConnectButton(
               status: app.status,
               onTap: server == null ? onOpenServers : app.toggle,
@@ -78,6 +86,14 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
+            if (app.status == ConnStatus.connected && app.trafficSupported)
+              Padding(
+                padding: const EdgeInsets.only(top: 16),
+                child: ValueListenableBuilder<TrafficInfo>(
+                  valueListenable: app.traffic,
+                  builder: (_, t, __) => _TrafficRow(info: t),
+                ),
+              ),
             if (app.mockMode && app.status == ConnStatus.connected)
               const Padding(
                 padding: EdgeInsets.only(top: 6),
@@ -91,7 +107,6 @@ class HomeScreen extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 14),
                 child: Container(
                   width: double.infinity,
-                  constraints: const BoxConstraints(maxHeight: 180),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
                     color: AppColors.redDark.withOpacity(0.25),
@@ -114,23 +129,21 @@ class HomeScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                      Flexible(
-                        child: SingleChildScrollView(
-                          child: Directionality(
-                            textDirection: TextDirection.ltr,
-                            child: SelectableText(
-                              app.error!,
-                              style: const TextStyle(
-                                  fontSize: 11, color: AppColors.textDim),
-                            ),
-                          ),
+                      Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: SelectableText(
+                          app.error!,
+                          style: const TextStyle(
+                              fontSize: 11, color: AppColors.textDim),
                         ),
                       ),
                     ],
                   ),
                 ),
               ),
-            const Spacer(),
+            const SizedBox(height: 24),
+                ]),
+                Column(children: [
             Card(
               child: ListTile(
                 onTap: onOpenServers,
@@ -146,8 +159,66 @@ class HomeScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-          ],
+                ]),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+}
+
+class _TrafficRow extends StatelessWidget {
+  final TrafficInfo info;
+  const _TrafficRow({required this.info});
+
+  Widget _cell(IconData icon, Color color, String speed, String total) {
+    return Expanded(
+      child: Column(
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, size: 18, color: color),
+              const SizedBox(width: 4),
+              Directionality(
+                textDirection: TextDirection.ltr,
+                child: Text(speed,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w700, color: color, fontSize: 15)),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Directionality(
+            textDirection: TextDirection.ltr,
+            child: Text(total,
+                style: const TextStyle(color: AppColors.textDim, fontSize: 12)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+      decoration: BoxDecoration(
+        color: AppColors.card,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Row(
+        children: [
+          _cell(Icons.arrow_downward_rounded, AppColors.green,
+              TrafficInfo.formatSpeed(info.downBps),
+              TrafficInfo.formatBytes(info.downTotal)),
+          Container(width: 1, height: 30, color: AppColors.textDim.withOpacity(0.3)),
+          _cell(Icons.arrow_upward_rounded, AppColors.red,
+              TrafficInfo.formatSpeed(info.upBps),
+              TrafficInfo.formatBytes(info.upTotal)),
+        ],
       ),
     );
   }

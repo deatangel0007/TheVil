@@ -23,7 +23,7 @@ class _SubscriptionsScreenState extends State<SubscriptionsScreen> {
 
   void _toast(String msg) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg), duration: const Duration(seconds: 6)));
   }
 
   Future<void> _paste() async {

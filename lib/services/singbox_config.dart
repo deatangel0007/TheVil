@@ -3,7 +3,7 @@ import 'dart:convert';
 /// تبدیل لینک اشتراک‌گذاری (vmess/vless/trojan/ss) به کانفیگ JSON برای sing-box.
 /// فرمت هدف: sing-box نسخه‌ی 1.12.x
 class SingboxConfig {
-  static String fromLink(String link) {
+  static String fromLink(String link, {String remoteDns = '1.1.1.1'}) {
     final config = {
       'log': {'level': 'info', 'timestamp': true},
       'dns': {
@@ -11,7 +11,7 @@ class SingboxConfig {
           {
             'type': 'udp',
             'tag': 'dns-remote',
-            'server': '1.1.1.1',
+            'server': remoteDns,
             'detour': 'proxy',
           },
           {'type': 'udp', 'tag': 'dns-direct', 'server': '8.8.8.8'},
@@ -125,6 +125,9 @@ class SingboxConfig {
     if (hash != -1) rest = rest.substring(0, hash);
     final qi = rest.indexOf('?');
     if (qi != -1) rest = rest.substring(0, qi);
+    while (rest.endsWith('/')) {
+      rest = rest.substring(0, rest.length - 1);
+    }
 
     String userInfo, hostPort;
     if (rest.contains('@')) {
@@ -212,10 +215,14 @@ class SingboxConfig {
   }
 
   static String _b64(String s) {
-    var t = s.replaceAll('-', '+').replaceAll('_', '/').trim();
+    var t = s
+        .replaceAll(RegExp(r'\s+'), '')
+        .replaceAll('-', '+')
+        .replaceAll('_', '/')
+        .replaceAll('=', '');
     while (t.length % 4 != 0) {
       t += '=';
     }
-    return utf8.decode(base64.decode(t));
+    return utf8.decode(base64.decode(t), allowMalformed: true);
   }
 }

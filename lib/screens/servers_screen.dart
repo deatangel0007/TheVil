@@ -10,18 +10,41 @@ import 'subscriptions_screen.dart';
 class ServersScreen extends StatelessWidget {
   const ServersScreen({super.key});
 
-  Future<void> _paste(BuildContext context) async {
-    final app = context.read<AppState>();
-    final data = await Clipboard.getData(Clipboard.kTextPlain);
-    final n = await app.addFromText(data?.text ?? '');
+  void _toast(BuildContext context, String msg) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(n > 0
-            ? '$n کانفیگ اضافه شد'
-            : 'لینک معتبری در کلیپ‌بورد پیدا نشد'),
-      ),
-    );
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(content: Text(msg), duration: const Duration(seconds: 6)),
+      );
+  }
+
+  Future<void> _add(BuildContext context, String text) async {
+    final app = context.read<AppState>();
+    try {
+      final msg = await app.addFromAny(text);
+      _toast(context, msg);
+    } catch (e) {
+      _toast(context, '$e');
+    }
+  }
+
+  Future<void> _paste(BuildContext context) async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (!context.mounted) return;
+    await _add(context, data?.text ?? '');
+  }
+
+  Future<void> _scan(BuildContext context) async {
+    final app = context.read<AppState>();
+    try {
+      final text = await app.scanQr();
+      if (text == null || text.isEmpty) return; // لغو شد
+      if (!context.mounted) return;
+      await _add(context, text);
+    } catch (e) {
+      _toast(context, '$e');
+    }
   }
 
   Color _pingColor(int? ms) {
@@ -44,7 +67,19 @@ class ServersScreen extends StatelessWidget {
     return Scaffold(
       appBar: AppBar(
         title: const Text('سرورها'),
+        bottom: app.busy
+            ? const PreferredSize(
+                preferredSize: Size.fromHeight(3),
+                child: LinearProgressIndicator(
+                    minHeight: 3, color: AppColors.red),
+              )
+            : null,
         actions: [
+          IconButton(
+            tooltip: 'اسکن QR',
+            icon: const Icon(Icons.qr_code_scanner_rounded),
+            onPressed: () => _scan(context),
+          ),
           IconButton(
             tooltip: 'اشتراک‌ها',
             icon: const Icon(Icons.rss_feed_rounded),
@@ -67,7 +102,7 @@ class ServersScreen extends StatelessWidget {
       body: app.servers.isEmpty
           ? const Center(
               child: Text(
-                'هنوز کانفیگی اضافه نکرده‌اید.\nلینک vmess / vless / trojan / ss را کپی کنید و دکمه‌ی پایین را بزنید.',
+                'هنوز کانفیگی اضافه نکرده‌اید.\nلینک کانفیگ یا لینک اشتراک (sub) را کپی کنید و دکمه‌ی پایین را بزنید،\nیا با آیکن QR بالا اسکن کنید.',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: AppColors.textDim, height: 1.8),
               ),

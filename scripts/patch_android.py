@@ -30,6 +30,7 @@ if "BIND_VPN_SERVICE" not in text:
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
 """
     service = """        <service
             android:name=".RedVpnService"
@@ -56,12 +57,22 @@ groovy = APP / "build.gradle"
 if kts.exists():
     g = kts.read_text(encoding="utf-8")
     g = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", "minSdk = 23", g)
-    g += '\ndependencies {\n    implementation(files("libs/libbox.aar"))\n}\n'
+    g += (
+        '\ndependencies {\n'
+        '    implementation(files("libs/libbox.aar"))\n'
+        '    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")\n'
+        '}\n'
+    )
     kts.write_text(g, encoding="utf-8")
 elif groovy.exists():
     g = groovy.read_text(encoding="utf-8")
     g = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", "minSdkVersion 23", g)
-    g += "\ndependencies {\n    implementation files('libs/libbox.aar')\n}\n"
+    g += (
+        "\ndependencies {\n"
+        "    implementation files('libs/libbox.aar')\n"
+        "    implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'\n"
+        "}\n"
+    )
     groovy.write_text(g, encoding="utf-8")
 else:
     raise SystemExit("build.gradle(.kts) پیدا نشد")
