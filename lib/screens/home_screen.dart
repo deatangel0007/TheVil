@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
 import '../widgets/connect_button.dart';
+import 'logs_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onOpenServers;
@@ -25,7 +26,17 @@ class HomeScreen extends StatelessWidget {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            const SizedBox(height: 12),
+            Align(
+              alignment: AlignmentDirectional.centerEnd,
+              child: IconButton(
+                tooltip: 'لاگ‌ها',
+                icon: const Icon(Icons.bug_report_outlined,
+                    color: AppColors.textDim),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const LogsScreen()),
+                ),
+              ),
+            ),
             Image.asset('assets/logo_mark.png', height: 56),
             const SizedBox(height: 6),
             const Text(
@@ -51,6 +62,22 @@ class HomeScreen extends StatelessWidget {
                 color: color,
               ),
             ),
+            if (app.testResult != null && app.status == ConnStatus.connected)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Text(
+                  app.testResult!,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: app.testResult!.contains('✓')
+                        ? AppColors.green
+                        : (app.testResult!.contains('✗')
+                            ? AppColors.red
+                            : AppColors.textDim),
+                  ),
+                ),
+              ),
             if (app.mockMode && app.status == ConnStatus.connected)
               const Padding(
                 padding: EdgeInsets.only(top: 6),

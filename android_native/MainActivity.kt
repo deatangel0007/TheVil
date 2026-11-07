@@ -56,6 +56,7 @@ class MainActivity : FlutterActivity() {
                             )
                         )
                     }
+                    "logs" -> result.success(RedVpnService.logsText())
                     "takeCrash" -> {
                         val f = java.io.File(filesDir, "crash.txt")
                         val text = if (f.exists()) f.readText() else null

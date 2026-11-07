@@ -39,6 +39,7 @@ class RedVpnService : VpnService(), PlatformInterface {
                 // اندروید می‌خواهد startForeground فوراً و قبل از هر کار دیگری صدا زده شود،
                 // وگرنه برنامه را با ForegroundServiceDidNotStartInTimeException می‌کُشد.
                 lastError = null
+                synchronized(logBuffer) { logBuffer.clear() }
                 val promoted = showForeground()
                 val config = intent.getStringExtra(EXTRA_CONFIG)
                 if (promoted && config != null) {
@@ -62,17 +63,22 @@ class RedVpnService : VpnService(), PlatformInterface {
 
     private fun startBox(config: String) {
         releaseBox()
+        synchronized(logBuffer) { logBuffer.clear() }
+        appLog("[app] starting sing-box, config ${config.length} bytes")
         try {
             setupOnce()
             val service = Libbox.newService(config, this)
+            appLog("[app] service created, starting...")
             service.start()
             box = service
             running = true
+            appLog("[app] service started OK")
         } catch (t: Throwable) {
             // خطا را ذخیره می‌کنیم تا برنامه به‌جای کرش، آن را نشان دهد
             lastError = "${t.javaClass.name}: ${t.message}\n" +
                 t.stackTrace.take(8).joinToString("\n") { "  at $it" }
             running = false
+            appLog("[app] FAILED: $lastError")
             stopBox()
         }
     }
@@ -151,14 +157,13 @@ class RedVpnService : VpnService(), PlatformInterface {
             .addAddress("172.19.0.1", 30)
             .addRoute("0.0.0.0", 0)
             .addDnsServer("1.1.1.1") // کوئری‌های DNS با hijack-dns توسط هسته گرفته می‌شود
-        try {
-            // خود اپ از VPN مستثنا شود تا حلقه‌ی ترافیک ایجاد نشود
-            builder.addDisallowedApplication(packageName)
-        } catch (_: Exception) {
-        }
+        // نکته: خود اپ را از VPN مستثنا نمی‌کنیم تا «تست اینترنت» از مسیر VPN برود.
+        // سوکت‌های خود هسته با protect() از VPN بیرون می‌مانند، پس حلقه ایجاد نمی‌شود.
         val pfd = builder.establish() ?: error("VPN establish failed")
         tun = pfd
-        return pfd.detachFd()
+        val fd = pfd.detachFd()
+        appLog("[TheVil] TUN ساخته شد (fd=$fd)")
+        return fd
     }
 
     /** سوکت‌های خروجی هسته از VPN رد نشوند. */
@@ -211,7 +216,7 @@ class RedVpnService : VpnService(), PlatformInterface {
         packageManager.getApplicationInfo(packageName, 0).uid
 
     override fun writeLog(message: String) {
-        android.util.Log.d("TheVil", message)
+        appLog(message)
     }
 
     override fun localDNSTransport(): io.nekohasekai.libbox.LocalDNSTransport? = null
@@ -226,6 +231,18 @@ class RedVpnService : VpnService(), PlatformInterface {
         const val ACTION_STOP = "com.redvpn.STOP"
         const val EXTRA_CONFIG = "config"
         private const val CHANNEL_ID = "red_vpn"
+
+        private val logBuffer = ArrayList<String>()
+
+        fun appLog(message: String) {
+            android.util.Log.d("TheVil", message)
+            synchronized(logBuffer) {
+                logBuffer.add(message)
+                if (logBuffer.size > 400) logBuffer.removeAt(0)
+            }
+        }
+
+        fun logsText(): String = synchronized(logBuffer) { logBuffer.joinToString("\n") }
 
         @Volatile
         var running = false

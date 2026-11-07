@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../models/server_config.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
+import 'subscriptions_screen.dart';
 
 class ServersScreen extends StatelessWidget {
   const ServersScreen({super.key});
@@ -44,6 +45,13 @@ class ServersScreen extends StatelessWidget {
       appBar: AppBar(
         title: const Text('سرورها'),
         actions: [
+          IconButton(
+            tooltip: 'اشتراک‌ها',
+            icon: const Icon(Icons.rss_feed_rounded),
+            onPressed: () => Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SubscriptionsScreen()),
+            ),
+          ),
           IconButton(
             tooltip: 'تست پینگ',
             icon: const Icon(Icons.speed_rounded),

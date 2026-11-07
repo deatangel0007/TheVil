@@ -5,7 +5,7 @@ import 'dart:convert';
 class SingboxConfig {
   static String fromLink(String link) {
     final config = {
-      'log': {'level': 'warn', 'timestamp': true},
+      'log': {'level': 'info', 'timestamp': true},
       'dns': {
         'servers': [
           {

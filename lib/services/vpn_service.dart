@@ -31,6 +31,15 @@ class VpnService {
     }
   }
 
+  /// لاگ‌های هسته‌ی sing-box و سرویس
+  Future<String> logs() async {
+    try {
+      return await _channel.invokeMethod<String>('logs') ?? '';
+    } on MissingPluginException {
+      return '(هسته‌ی نیتیو وصل نیست)';
+    }
+  }
+
   /// متن کرش دفعه‌ی قبل (اگر برنامه کرش کرده باشد)
   Future<String?> takeCrash() async {
     try {

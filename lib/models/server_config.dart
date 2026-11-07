@@ -12,6 +12,9 @@ class ServerConfig {
   /// لینک اصلی (vmess://... و غیره) که به هسته داده می‌شود
   final String raw;
 
+  /// اگر این سرور از یک اشتراک آمده، شناسه‌ی اشتراک؛ وگرنه null
+  final String? subId;
+
   /// پینگ بر حسب میلی‌ثانیه؛ null = تست نشده، -1 = ناموفق
   final int? pingMs;
 
@@ -22,6 +25,7 @@ class ServerConfig {
     required this.address,
     required this.port,
     required this.raw,
+    this.subId,
     this.pingMs,
   });
 
@@ -32,7 +36,19 @@ class ServerConfig {
         address: address,
         port: port,
         raw: raw,
+        subId: subId,
         pingMs: pingMs ?? this.pingMs,
+      );
+
+  ServerConfig withSubId(String? sub) => ServerConfig(
+        id: id,
+        name: name,
+        protocol: protocol,
+        address: address,
+        port: port,
+        raw: raw,
+        subId: sub,
+        pingMs: pingMs,
       );
 
   String get protocolLabel => switch (protocol) {
@@ -49,6 +65,7 @@ class ServerConfig {
         'address': address,
         'port': port,
         'raw': raw,
+        'subId': subId,
       };
 
   factory ServerConfig.fromJson(Map<String, dynamic> j) => ServerConfig(
@@ -58,6 +75,7 @@ class ServerConfig {
         address: j['address'] as String,
         port: j['port'] as int,
         raw: j['raw'] as String,
+        subId: j['subId'] as String?,
       );
 
   static String encodeList(List<ServerConfig> list) =>
