@@ -36,26 +36,33 @@ class RedVpnService : VpnService(), PlatformInterface {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> {
+                // اندروید می‌خواهد startForeground فوراً و قبل از هر کار دیگری صدا زده شود،
+                // وگرنه برنامه را با ForegroundServiceDidNotStartInTimeException می‌کُشد.
+                lastError = null
+                val promoted = showForeground()
                 val config = intent.getStringExtra(EXTRA_CONFIG)
-                if (config != null) startBox(config) else stopSelf()
+                if (promoted && config != null) {
+                    startBox(config)
+                } else {
+                    if (!promoted && lastError == null) lastError = "startForeground failed"
+                    stopBox()
+                }
             }
-            ACTION_STOP -> stopBox()
+            else -> stopBox()
         }
         return START_NOT_STICKY
     }
 
     override fun onDestroy() {
-        stopBox()
+        releaseBox()
         super.onDestroy()
     }
 
     // ------------------------------------------------------------- lifecycle
 
     private fun startBox(config: String) {
-        stopBox()
-        lastError = null
+        releaseBox()
         try {
-            showForeground()
             setupOnce()
             val service = Libbox.newService(config, this)
             service.start()
@@ -70,7 +77,8 @@ class RedVpnService : VpnService(), PlatformInterface {
         }
     }
 
-    private fun stopBox() {
+    /** هسته و TUN را می‌بندد، بدون اینکه خود سرویس را متوقف کند. */
+    private fun releaseBox() {
         try {
             box?.close()
         } catch (_: Throwable) {
@@ -82,6 +90,10 @@ class RedVpnService : VpnService(), PlatformInterface {
         }
         tun = null
         running = false
+    }
+
+    private fun stopBox() {
+        releaseBox()
         try {
             stopForeground(STOP_FOREGROUND_REMOVE)
         } catch (_: Throwable) {
@@ -100,7 +112,18 @@ class RedVpnService : VpnService(), PlatformInterface {
         didSetup = true
     }
 
-    private fun showForeground() {
+    /** سرویس را به حالت پیش‌زمینه می‌برد؛ در صورت شکست، خطا را ذخیره و false برمی‌گرداند. */
+    private fun showForeground(): Boolean {
+        return try {
+            promoteToForeground()
+            true
+        } catch (t: Throwable) {
+            lastError = "startForeground: ${t.javaClass.name}: ${t.message}"
+            false
+        }
+    }
+
+    private fun promoteToForeground() {
         val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
             NotificationChannel(CHANNEL_ID, "TheVil", NotificationManager.IMPORTANCE_LOW)
