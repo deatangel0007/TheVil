@@ -22,7 +22,7 @@ class RedVpnApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Red VPN',
+      title: 'TheVil',
       debugShowCheckedModeBanner: false,
       theme: buildAppTheme(),
       builder: (context, child) =>

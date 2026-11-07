@@ -26,12 +26,14 @@ class HomeScreen extends StatelessWidget {
         child: Column(
           children: [
             const SizedBox(height: 12),
+            Image.asset('assets/logo_mark.png', height: 56),
+            const SizedBox(height: 6),
             const Text(
-              'RED VPN',
+              'TheVil',
               style: TextStyle(
-                fontSize: 22,
+                fontSize: 24,
                 fontWeight: FontWeight.w800,
-                letterSpacing: 4,
+                letterSpacing: 3,
                 color: AppColors.red,
               ),
             ),

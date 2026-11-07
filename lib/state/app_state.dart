@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../models/server_config.dart';
 import '../services/config_parser.dart';
+import '../services/singbox_config.dart';
 import '../services/vpn_service.dart';
 
 enum ConnStatus { disconnected, connecting, connected }
@@ -84,7 +85,7 @@ class AppState extends ChangeNotifier {
     status = ConnStatus.connecting;
     notifyListeners();
     try {
-      await _vpn.start(s.raw);
+      await _vpn.start(SingboxConfig.fromLink(s.raw));
       status = ConnStatus.connected;
     } catch (_) {
       status = ConnStatus.disconnected;

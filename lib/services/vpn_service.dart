@@ -11,9 +11,10 @@ class VpnService {
   /// true یعنی هسته‌ی واقعی پیدا نشده و اتصال شبیه‌سازی می‌شود.
   bool mockMode = false;
 
-  Future<void> start(String rawLink) async {
+  /// [configJson] کانفیگ کامل sing-box است (از SingboxConfig.fromLink).
+  Future<void> start(String configJson) async {
     try {
-      await _channel.invokeMethod('start', {'link': rawLink});
+      await _channel.invokeMethod('start', {'config': configJson});
     } on MissingPluginException {
       mockMode = true;
       await Future.delayed(const Duration(milliseconds: 1500));
